@@ -85,3 +85,46 @@ def test_leduc_anchor_average_policy_near_nash(seed):
     assert nc <= LEDUC_UNIFORM_RATIO * uniform_nc, (
         f"Leduc NashConv {nc:.4f} > 10% of uniform's {uniform_nc:.4f}"
     )
+
+
+PUSHFOLD_CEILING = 100_000
+PUSHFOLD_CHECKPOINT = 10_000
+PUSHFOLD_NASHCONV_MAX = 0.15
+PUSHFOLD_TV_MAX = 0.05
+
+
+@pytest.mark.tier_b
+@pytest.mark.parametrize("seed", SEEDS)
+def test_pushfold_checkpoint_gate(seed):
+    """Checkpoint semantics (SPEC 8): pass once both conditions hold at a
+    checkpoint AND are reconfirmed at the next one; budget ceiling 100k."""
+    from kalay.cards import native
+    from kalay.games.pushfold import PushFoldEnv
+
+    cfg, _ = derive_engine_config(PushFoldEnv, budget_steps=PUSHFOLD_CEILING, seed=seed)
+    engine = RNaDEngine(cfg)
+    rng = np.random.default_rng(seed)
+    nash_p, nash_q, _ = native.nash_pushfold()
+    conditions_met = False
+    passed = False
+    for _ in range(PUSHFOLD_CEILING // PUSHFOLD_CHECKPOINT):
+        for _ in range(PUSHFOLD_CHECKPOINT):
+            batch = collect_batch(PushFoldEnv, engine.policy_probs_np,
+                                  BATCH_HANDS, rng, cfg.reward_scale)
+            engine.train_step(batch)
+        fn = anchor_average_policy_fn(engine)
+        p, q = native.class_strategies(fn)
+        nc = native.nashconv(p, q)
+        ok = (
+            nc <= PUSHFOLD_NASHCONV_MAX
+            and native.range_tv(p, nash_p) <= PUSHFOLD_TV_MAX
+            and native.range_tv(q, nash_q) <= PUSHFOLD_TV_MAX
+        )
+        print(f"[pushfold seed={seed}] nc={nc:.4f} "
+              f"tv_p={native.range_tv(p, nash_p):.4f} "
+              f"tv_q={native.range_tv(q, nash_q):.4f}", flush=True)
+        if conditions_met and ok:
+            passed = True
+            break
+        conditions_met = ok
+    assert passed, "push-fold gate conditions never confirmed at two checkpoints"

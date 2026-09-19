@@ -112,7 +112,9 @@ def derive_engine_config(
     **overrides,
 ) -> tuple[EngineConfig, GameStats]:
     """Build the engine config for a game from measured stats + class constants."""
-    stats = analyze_game(make_env)
+    probe = make_env()
+    analytic = getattr(type(probe), "ANALYTIC_STATS", None)
+    stats = analytic if analytic is not None else analyze_game(make_env)
     cfg = EngineConfig(
         obs_dim=stats.obs_dim,
         n_actions=stats.n_actions,

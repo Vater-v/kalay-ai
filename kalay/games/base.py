@@ -33,6 +33,17 @@ class GameEnv(ABC):
     def step_chance(self, outcome: int) -> None:
         """Apply a chance outcome."""
 
+    def sample_chance(self, rng: np.random.Generator) -> None:
+        """Sample a chance outcome with `rng`.
+
+        Default: enumerate chance_probs(). Games with astronomically many
+        outcomes (full-deck deals) override this with direct sampling; their
+        chance_probs() may raise, and analytic stats + specialised eval replace
+        the generic tree machinery (SPEC 6).
+        """
+        probs = self.chance_probs()
+        self.step_chance(int(rng.choice(len(probs), p=probs)))
+
     # --- decisions ---
     @abstractmethod
     def current_player(self) -> int:

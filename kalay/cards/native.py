@@ -67,3 +67,41 @@ def nashconv(push: np.ndarray, call: np.ndarray) -> float:
         np.ascontiguousarray(push, dtype=np.float32),
         np.ascontiguousarray(call, dtype=np.float32),
     )
+
+
+def class_repr_cards(idx: int) -> tuple[int, int]:
+    """Representative combo of class idx (matches kalay_rs hand_169_to_cards)."""
+    name = hand_name(idx)
+    r1 = "23456789TJQKA".index(name[0])
+    r2 = "23456789TJQKA".index(name[1])
+    suited = len(name) > 2 and name[2] == "s"
+    hi, lo = max(r1, r2), min(r1, r2)
+    if suited:
+        return (hi << 2, lo << 2)
+    return (hi << 2, (lo << 2) | 1)
+
+
+def class_strategies(policy_fn) -> tuple[np.ndarray, np.ndarray]:
+    """(push_probs[169], call_probs[169]) of `policy_fn` over the 169 classes."""
+    from kalay.games.pushfold import PushFoldEnv
+
+    mask = np.ones(2, dtype=np.float32)
+    p = np.empty(N_CLASSES)
+    q = np.empty(N_CLASSES)
+    env = PushFoldEnv()
+    for i in range(N_CLASSES):
+        hole = class_repr_cards(i)
+        env.set_deal(hole, (0, 1))
+        env._stage = 1
+        p[i] = float(np.asarray(policy_fn(env.obs(0), mask))[1])
+        env2 = PushFoldEnv()
+        env2.set_deal((0, 1), hole)
+        env2.step(1)  # BTN pushed; BB to act
+        q[i] = float(np.asarray(policy_fn(env2.obs(1), mask))[1])
+    return p, q
+
+
+def range_tv(agent: np.ndarray, nash: np.ndarray) -> float:
+    """Prior-weighted total variation distance between two class ranges."""
+    prior = np.array([pushfold_solver().prior(i) for i in range(N_CLASSES)])
+    return float((prior * np.abs(agent - nash)).sum())

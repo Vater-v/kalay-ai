@@ -31,8 +31,7 @@ def collect_batch(
             if env.is_terminal():
                 break
             if env.is_chance():  # leading deal OR mid-episode chance (Leduc public card)
-                probs = env.chance_probs()
-                env.step_chance(int(rng.choice(len(probs), p=probs)))
+                env.sample_chance(rng)
                 continue
             p = env.current_player()
             obs = env.obs(p)
