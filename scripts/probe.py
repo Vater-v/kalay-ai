@@ -64,15 +64,17 @@ def main() -> None:
         m = engine.train_step(batch)
         if (i + 1) % log_every == 0 or i + 1 == args.steps:
             fn = anchor_average_policy_fn(engine)
-            nc = nash_conv(env_cls(), fn)
-            extra = (f" EV {policy_value(env_cls(), fn, 0):+.4f}"
-                     if args.game not in ("rps", "pushfold") else "")
             if args.game == "pushfold":
                 from kalay.cards import native
                 pp, qq = native.class_strategies(fn)
                 np_, nq_, _ = native.nash_pushfold()
+                nc = native.nashconv(pp, qq)
                 extra = (f" tv_p {native.range_tv(pp, np_):.4f}"
                          f" tv_q {native.range_tv(qq, nq_):.4f}")
+            else:
+                nc = nash_conv(env_cls(), fn)
+                extra = (f" EV {policy_value(env_cls(), fn, 0):+.4f}"
+                         if args.game != "rps" else "")
             print(f"[{args.tag}] step {i+1:6d} | nc_avg {nc:7.4f}{extra} | "
                   f"tau {m['tau']:.3f} | phases {engine.phases} | "
                   f"rail {m['rail_fraction']:.2f} | {time.time()-t0:.0f}s", flush=True)
