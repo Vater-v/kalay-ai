@@ -7,8 +7,9 @@ Player-Centric R-NaD + NeuRD движок для игр с неполной ин
 
 ```bash
 cd C:\projects\kalay-ai
-python -m pytest tests/tier_a -q          # инварианты (~15 c)
-python -m pytest tests/tier_b -q          # сходимость (медленно: минуты-десятки минут)
+python -m pytest tests/tier_a -q -n auto  # инварианты (~20 c, параллельно)
+python -m pytest tests/tier_b -q -n 3     # сходимость: 6 тестов на 3 воркерах (~17 мин
+                                         # вместо ~49 последовательных минут)
 ```
 
 ## Структура
