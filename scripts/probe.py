@@ -22,10 +22,12 @@ from kalay.eval.policy_avg import anchor_average_policy_fn
 from kalay.eval.tabular import nash_conv, policy_value
 from kalay.games.kuhn import KuhnPokerEnv
 from kalay.games.leduc import LeducEnv
+from kalay.games.pushfold import PushFoldEnv
 from kalay.core.vec_leduc import collect_leduc_vec
 from kalay.games.rps import RPSEnv
 
-GAMES = {"rps": RPSEnv, "kuhn": KuhnPokerEnv, "leduc": LeducEnv}
+GAMES = {"rps": RPSEnv, "kuhn": KuhnPokerEnv, "leduc": LeducEnv,
+         "pushfold": PushFoldEnv}
 
 
 def main() -> None:
@@ -37,6 +39,8 @@ def main() -> None:
     ap.add_argument("--optimism", type=float, default=0.0)
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--tag", default="probe")
+    ap.add_argument("--tau", type=float, default=None,
+                    help="override the class tau (constant)")
     ap.add_argument("--sequential", action="store_true",
                     help="force the sequential collector for leduc")
     args = ap.parse_args()
@@ -45,6 +49,9 @@ def main() -> None:
     env_cls = GAMES[args.game]
     cfg, _ = derive_engine_config(env_cls, budget_steps=args.steps, seed=args.seed)
     cfg.optimism_beta = args.optimism
+    if args.tau is not None:
+        cfg.tau = args.tau
+        cfg.tau_min = args.tau
     engine = RNaDEngine(cfg)
     rng = np.random.default_rng(args.seed)
     t0 = time.time()
@@ -59,7 +66,13 @@ def main() -> None:
             fn = anchor_average_policy_fn(engine)
             nc = nash_conv(env_cls(), fn)
             extra = (f" EV {policy_value(env_cls(), fn, 0):+.4f}"
-                     if args.game != "rps" else "")
+                     if args.game not in ("rps", "pushfold") else "")
+            if args.game == "pushfold":
+                from kalay.cards import native
+                pp, qq = native.class_strategies(fn)
+                np_, nq_, _ = native.nash_pushfold()
+                extra = (f" tv_p {native.range_tv(pp, np_):.4f}"
+                         f" tv_q {native.range_tv(qq, nq_):.4f}")
             print(f"[{args.tag}] step {i+1:6d} | nc_avg {nc:7.4f}{extra} | "
                   f"tau {m['tau']:.3f} | phases {engine.phases} | "
                   f"rail {m['rail_fraction']:.2f} | {time.time()-t0:.0f}s", flush=True)
