@@ -22,6 +22,7 @@ from kalay.eval.policy_avg import anchor_average_policy_fn
 from kalay.eval.tabular import nash_conv, policy_value
 from kalay.games.kuhn import KuhnPokerEnv
 from kalay.games.leduc import LeducEnv
+from kalay.core.vec_leduc import collect_leduc_vec
 from kalay.games.rps import RPSEnv
 
 GAMES = {"rps": RPSEnv, "kuhn": KuhnPokerEnv, "leduc": LeducEnv}
@@ -36,6 +37,8 @@ def main() -> None:
     ap.add_argument("--optimism", type=float, default=0.0)
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--tag", default="probe")
+    ap.add_argument("--sequential", action="store_true",
+                    help="force the sequential collector for leduc")
     args = ap.parse_args()
 
     torch.set_num_threads(args.threads)
