@@ -32,7 +32,7 @@ def test_analyzer_exact_statistics():
     stats = analyze_game(LeducEnv)
     assert stats.n_infosets == 288          # rank-collapsed (suits canonicalized away)
     assert stats.max_decisions_per_player == 4
-    assert stats.max_abs_reward == 7.0
+    assert stats.max_abs_reward == 13.0     # stake accounting (audit C1 fix)
     assert stats.n_players == 2 and stats.n_actions == 3
 
 
@@ -44,8 +44,17 @@ def test_showdown_spots():
     np.testing.assert_allclose(play(deal(0, 4), [1, 1, 1, 1], public=1).rewards(), [1, -1])
     # tie: both hold J (different suits), public K -> split
     np.testing.assert_allclose(play(deal(0, 1), [1, 1, 1, 1], public=4).rewards(), [0, 0])
-    # round-1 bet + call: pot 2 + 2 + 2 = 6 -> +-3
+    # round-1 bet + call: pot 2 antes + 2 + 2 = 6 -> +-3 (CALLER wins)
     np.testing.assert_allclose(play(deal(0, 4), [2, 1, 1, 1], public=3).rewards(), [-3, 3])
+    # ...and AGGRESSOR wins after a call (the audit-C1 case: caller must pay)
+    np.testing.assert_allclose(play(deal(4, 0), [2, 1, 1, 1], public=3).rewards(), [3, -3])
+    # max swing: r1 bet-raise-call + r2 bet-raise-call -> inv 13 each, pot 26
+    env = deal(4, 0)
+    env.step(2); env.step(2); env.step(1)
+    env.step_chance([c for c in range(6) if c not in env._hole_ids].index(3))
+    env.step(2); env.step(2); env.step(1)
+    np.testing.assert_allclose(env.rewards(), [13, -13])
+    np.testing.assert_allclose(env._investments(), [13.0, 13.0])
     # round-1 bet + fold: folder invested the ante only
     np.testing.assert_allclose(play(deal(4, 0), [2, 0]).rewards(), [1, -1])
 
@@ -85,7 +94,7 @@ def test_exhaustive_rules_invariants():
             if env.is_terminal():
                 rew = env.rewards()
                 assert rew.sum() == pytest.approx(0.0)
-                assert abs(rew).max() <= 7.0 + 1e-9
+                assert abs(rew).max() <= 13.0 + 1e-9
 
 
 @pytest.mark.tier_a

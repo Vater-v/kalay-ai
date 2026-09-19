@@ -39,7 +39,6 @@ class EngineConfig:
     reward_scale: float = 1.0
     avg_window: int = 12  # anchor snapshots in the Nash-average window
     anchor_mode: str = "fixed"            # "fixed" (every anchor_period) | "drift"
-    anchor_kl_drift: float = 1.0          # legacy drift trigger (superseded by three-way)
     anchor_cum_kl: float = 3.0            # drift mode: high-water accumulated KL per phase
     anchor_settle_steps: int = 300        # drift mode: min phase length for settle trigger
     anchor_cool_tol: float = 0.05         # drift mode: |EMA_fast - EMA_slow| rel. tolerance

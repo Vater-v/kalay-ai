@@ -7,8 +7,13 @@ public card revealed between rounds (mid-episode chance node); round 2 bet=4
 (player 1 opens). Showdown: pair with the board beats high card; equal strength
 splits. Observations encode RANKS only - suits are canonicalized away by
 construction (hand strength depends only on ranks in Leduc).
-Max |net| = 13 chips.
+
+Betting (stake-based standard limit): each bet/raise raises the round stake
+by the round bet (2 / 4); a call matches the stake. Max round contribution
+4 (r1) + 8 (r2) + ante 1 = 13. Max |net| = 13. Revision (external audit C1):
+the previous flat accounting let calls cost 0, making fold dominated.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -85,6 +90,7 @@ class LeducEnv(GameEnv):
                 mask[0] = 1.0  # fold only against a bet (SPEC 9)
             if self._raises() < 2:
                 mask[2] = 1.0  # bet / raise
+            mask.flags.writeable = False
             _MASK_CACHE[key] = mask
         return mask
 
@@ -150,6 +156,7 @@ class LeducEnv(GameEnv):
         for i, (_, action) in enumerate(self._hist[:8]):
             hist[4 * i + action + 1] = 1.0
         obs = np.concatenate([hole, public, rnd, pid, hist])
+        obs.flags.writeable = False
         _OBS_CACHE[key] = obs
         return obs
 
@@ -171,9 +178,23 @@ class LeducEnv(GameEnv):
         return rh[-2][1] == 1 or any(a == 2 for _, a in rh[:-1])
 
     def _investments(self) -> list[float]:
+        """Stake-based limit accounting: bet/raise raises the stake, call matches it."""
         inv = [1.0, 1.0]
+        contrib = [0.0, 0.0]
+        stake = 0.0
+        cur_round = 1
         for i, (p, a) in enumerate(self._hist):
+            rnd = 1 if (self._public_id is None or i < self._round_start) else 2
+            if rnd != cur_round:
+                cur_round = rnd
+                contrib = [0.0, 0.0]
+                stake = 0.0
+            if a == 0:
+                break
             if a == 2:
-                bet = 2.0 if (self._public_id is None or i < self._round_start) else 4.0
-                inv[p] += bet
+                stake += 2.0 if rnd == 1 else 4.0
+            add = stake - contrib[p]  # call matches; the aggressor pays the new stake
+            if add > 0:
+                contrib[p] += add
+                inv[p] += add
         return inv

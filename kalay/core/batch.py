@@ -37,7 +37,7 @@ class TrajectoryBatch:
         L = self.hand_lengths
         assert (L >= 1).all() and (L <= T).all(), "C2 hand_lengths in [1, T]"
         # decision mask [T, B]
-        t_idx = torch.arange(T).unsqueeze(1).expand(T, B)
+        t_idx = torch.arange(T, device=self.terminal_reward.device).unsqueeze(1).expand(T, B)
         dec = (t_idx < L.unsqueeze(0))
         # C3: taken actions are legal on real decisions
         legal_taken = self.legal_mask.gather(-1, self.action_taken.unsqueeze(-1)).squeeze(-1)
@@ -45,10 +45,9 @@ class TrajectoryBatch:
         # C4: behavior probabilities on real decisions
         mu = self.behavior_prob[dec]
         assert (mu > 0).all() and (mu <= 1.0 + 1e-6).all(), "C4 0 < mu <= 1"
-        # C5: terminal reward lives exactly on the last real decision
-        col_sum = self.terminal_reward.sum(dim=0)
-        last = self.terminal_reward[L - 1, torch.arange(B)]
-        assert torch.allclose(col_sum, last, atol=1e-6), "C5 reward only at t = L-1"
+        # C5: terminal reward lives ONLY on the last real decision (t = L-1)
+        pre_last = dec & (t_idx < L.unsqueeze(0) - 1)
+        assert (self.terminal_reward[pre_last] == 0).all(), "C5 reward only at t = L-1"
         assert (self.terminal_reward[~dec] == 0).all(), "C5 padding rows carry no reward"
         # C6: player ids
         if n_players is not None:

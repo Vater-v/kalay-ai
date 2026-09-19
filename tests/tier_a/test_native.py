@@ -63,12 +63,15 @@ def _ref_eval7(cards: list[int]) -> tuple:
 
 
 def _cat(rust_rank: int) -> int:
-    """Map the Rust absolute rank (1..7462) to a category 0..8 (higher=stronger)."""
-    if rust_rank <= 4:
-        return 8       # straight flush
-    if rust_rank <= 164:
+    """Map the Rust absolute rank (1..7462) to a category 0..8 (higher=stronger).
+
+    Boundaries mirror rs/src/eval.rs HandRank::category() exactly.
+    """
+    if rust_rank <= 10:
+        return 8       # straight flush (incl. royal)
+    if rust_rank <= 166:
         return 7       # quads
-    if rust_rank <= 324:
+    if rust_rank <= 322:
         return 6       # full house
     if rust_rank <= 1599:
         return 5       # flush

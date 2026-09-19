@@ -100,7 +100,6 @@ CLASS_CONSTANTS = dict(
     z_thresh=3.0,
     lr_policy=1e-3,
     lr_value=1e-3,
-    anchor_kl_drift=1.0,   # nats of accumulated KL(pi || pi_ref) per anchor phase
 )
 
 
@@ -127,7 +126,6 @@ def derive_engine_config(
         reward_scale=stats.max_abs_reward,
         mu_floor=pi_min_bound(stats.n_actions, CLASS_CONSTANTS["z_thresh"]),
         anchor_mode="drift",
-        anchor_kl_drift=CLASS_CONSTANTS["anchor_kl_drift"],
         planned_steps=budget_steps,
         seed=seed,
     )
