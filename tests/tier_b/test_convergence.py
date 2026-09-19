@@ -19,6 +19,7 @@ from kalay.core.gamestats import derive_engine_config
 from kalay.eval.policy_avg import anchor_average_policy_fn
 from kalay.eval.tabular import nash_conv, policy_value
 from kalay.games.kuhn import KuhnPokerEnv
+from kalay.games.leduc import LeducEnv
 from kalay.games.rps import RPSEnv
 
 RPS_STEPS = 4000
@@ -60,4 +61,27 @@ def test_kuhn_anchor_average_policy_near_nash(seed):
     ev = policy_value(KuhnPokerEnv(), fn, player=0)
     assert abs(ev - (-1.0 / 18.0)) <= KUHN_VALUE_TOL, (
         f"Kuhn EV {ev:.4f} deviates from the analytic game value -1/18"
+    )
+
+
+def _uniform_policy(obs, mask):
+    m = np.asarray(mask, dtype=np.float64)
+    return m / m.sum()
+
+
+LEDUC_STEPS = 150000
+LEDUC_NASHCONV_MAX = 0.15
+LEDUC_UNIFORM_RATIO = 0.10  # also <= 10% of the uniform policy's NashConv (unit guard)
+
+
+@pytest.mark.tier_b
+@pytest.mark.parametrize("seed", SEEDS)
+def test_leduc_anchor_average_policy_near_nash(seed):
+    engine = train(LeducEnv, steps=LEDUC_STEPS, seed=seed)
+    fn = anchor_average_policy_fn(engine)
+    nc = nash_conv(LeducEnv(), fn)
+    assert nc <= LEDUC_NASHCONV_MAX, f"Leduc NashConv {nc:.4f} > {LEDUC_NASHCONV_MAX}"
+    uniform_nc = nash_conv(LeducEnv(), _uniform_policy)
+    assert nc <= LEDUC_UNIFORM_RATIO * uniform_nc, (
+        f"Leduc NashConv {nc:.4f} > 10% of uniform's {uniform_nc:.4f}"
     )
