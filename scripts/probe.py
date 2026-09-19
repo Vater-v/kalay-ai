@@ -21,9 +21,10 @@ from kalay.core.gamestats import derive_engine_config
 from kalay.eval.policy_avg import anchor_average_policy_fn
 from kalay.eval.tabular import nash_conv, policy_value
 from kalay.games.kuhn import KuhnPokerEnv
+from kalay.games.leduc import LeducEnv
 from kalay.games.rps import RPSEnv
 
-GAMES = {"rps": RPSEnv, "kuhn": KuhnPokerEnv}
+GAMES = {"rps": RPSEnv, "kuhn": KuhnPokerEnv, "leduc": LeducEnv}
 
 
 def main() -> None:
@@ -55,7 +56,7 @@ def main() -> None:
             fn = anchor_average_policy_fn(engine)
             nc = nash_conv(env_cls(), fn)
             extra = (f" EV {policy_value(env_cls(), fn, 0):+.4f}"
-                     if args.game == "kuhn" else "")
+                     if args.game != "rps" else "")
             print(f"[{args.tag}] step {i+1:6d} | nc_avg {nc:7.4f}{extra} | "
                   f"tau {m['tau']:.3f} | phases {engine.phases} | "
                   f"rail {m['rail_fraction']:.2f} | {time.time()-t0:.0f}s", flush=True)

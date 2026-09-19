@@ -12,7 +12,7 @@ from collections.abc import Callable
 import numpy as np
 
 from kalay.core.batch import TrajectoryBatch, pack_subtrajectories
-from kalay.games.base import GameEnv, reset_env
+from kalay.games.base import GameEnv
 
 
 def collect_batch(
@@ -26,9 +26,14 @@ def collect_batch(
     cache: dict[bytes, tuple[np.ndarray, np.ndarray]] = {}
     for _ in range(n_hands):
         env = make_env()
-        reset_env(env, rng)
         recs: list[list[tuple]] = [[] for _ in range(env.n_players)]
-        while not env.is_terminal():
+        while True:
+            if env.is_terminal():
+                break
+            if env.is_chance():  # leading deal OR mid-episode chance (Leduc public card)
+                probs = env.chance_probs()
+                env.step_chance(int(rng.choice(len(probs), p=probs)))
+                continue
             p = env.current_player()
             obs = env.obs(p)
             mask = env.legal_actions_mask()
