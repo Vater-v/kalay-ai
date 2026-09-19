@@ -161,8 +161,8 @@ class RNaDEngine:
 
     def policy_probs(self, obs, legal_mask) -> "torch.Tensor":
         """Single-observation probabilities under the current policy."""
-        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
-        mask_t = torch.as_tensor(legal_mask, dtype=torch.float32, device=self.device).unsqueeze(0)
+        obs_t = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+        mask_t = torch.tensor(legal_mask, dtype=torch.float32, device=self.device).unsqueeze(0)
         with torch.no_grad():
             probs = masked_softmax(self.policy_net(obs_t), mask_t).squeeze(0)
         return probs
@@ -174,6 +174,23 @@ class RNaDEngine:
         this evaluates the identical MLP in numpy (~20 mcs). Float diffs vs the
         torch forward are ~1e-6; mu recorded here IS the sampling distribution.
         """
+        self._ensure_np_weights()
+        h = np.maximum(obs @ self._np_w1.T + self._np_b1, 0.0)
+        z = h @ self._np_w2.T + self._np_b2
+        z = np.where(legal_mask == 1.0, z, -1e9)
+        e = np.exp(z - z.max())
+        return e / e.sum()
+
+    def policy_probs_np_batch(self, obs: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
+        """Batched [N, obs_dim] fast path for vectorized collectors."""
+        self._ensure_np_weights()
+        h = np.maximum(obs @ self._np_w1.T + self._np_b1, 0.0)
+        z = h @ self._np_w2.T + self._np_b2
+        z = np.where(legal_mask == 1.0, z, -1e9)
+        e = np.exp(z - z.max(axis=1, keepdims=True))
+        return e / e.sum(axis=1, keepdims=True)
+
+    def _ensure_np_weights(self) -> None:
         if self._np_cache_step != self.step_count:
             sd = self.policy_net.state_dict()
             self._np_w1 = sd["backbone.0.weight"].detach().cpu().numpy()
@@ -181,11 +198,6 @@ class RNaDEngine:
             self._np_w2 = sd["head.weight"].detach().cpu().numpy()
             self._np_b2 = sd["head.bias"].detach().cpu().numpy()
             self._np_cache_step = self.step_count
-        h = np.maximum(obs @ self._np_w1.T + self._np_b1, 0.0)
-        z = h @ self._np_w2.T + self._np_b2
-        z = np.where(legal_mask == 1.0, z, -1e9)
-        e = np.exp(z - z.max())
-        return e / e.sum()
 
     def anchor_state_dicts(self, window: int | None = None) -> list[dict]:
         """Anchor snapshots (Nash-average window) including the current parameters."""
