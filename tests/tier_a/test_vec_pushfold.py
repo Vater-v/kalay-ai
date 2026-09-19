@@ -55,7 +55,8 @@ def test_v3_zero_sum_rewards_and_determinism():
             assert rew[i] == pytest.approx(-0.5)
             i += 1
     eng2 = _engine(seed=3)
-    rng2 = np.random.default_rng(3)
+    rng = np.random.default_rng(7)  # realign both streams (b1 advanced rng)
+    rng2 = np.random.default_rng(7)
     losses1 = [eng.train_step(collect_pushfold_v3(eng, 32, rng))["loss_policy"]
                for _ in range(3)]
     losses2 = [eng2.train_step(collect_pushfold_v3(eng2, 32, rng2))["loss_policy"]
