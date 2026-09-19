@@ -18,6 +18,12 @@ from kalay.games.base import GameEnv
 _DECK = [(r, s) for r in range(3) for s in range(2)]          # card id -> (rank, suit)
 _HOLE_DEALS = [(a, b) for a in range(6) for b in range(6) if a != b]  # 30 ordered deals
 
+# Memoization of pure state->observation/mask functions (obs() is a pure
+# function of the state; the number of distinct states is bounded by the game
+# tree). Returned arrays are SHARED - callers must treat them as immutable.
+_OBS_CACHE: dict[tuple, np.ndarray] = {}
+_MASK_CACHE: dict[tuple, np.ndarray] = {}
+
 
 class LeducEnv(GameEnv):
     n_players = 2
@@ -70,12 +76,16 @@ class LeducEnv(GameEnv):
         return self._turn
 
     def legal_actions_mask(self) -> np.ndarray:
-        mask = np.zeros(self.n_actions, dtype=np.float32)
-        mask[1] = 1.0  # check / call always legal
-        if self._facing_bet():
-            mask[0] = 1.0  # fold only against a bet (SPEC 9)
-        if self._raises() < 2:
-            mask[2] = 1.0  # bet / raise
+        key = tuple(self._round_hist())  # determines facing_bet and raises
+        mask = _MASK_CACHE.get(key)
+        if mask is None:
+            mask = np.zeros(self.n_actions, dtype=np.float32)
+            mask[1] = 1.0  # check / call always legal
+            if self._facing_bet():
+                mask[0] = 1.0  # fold only against a bet (SPEC 9)
+            if self._raises() < 2:
+                mask[2] = 1.0  # bet / raise
+            _MASK_CACHE[key] = mask
         return mask
 
     def step(self, action: int) -> None:
@@ -121,6 +131,10 @@ class LeducEnv(GameEnv):
 
     # --- observation ---
     def obs(self, player: int) -> np.ndarray:
+        key = (self._hole_ids[player], self._public_id, tuple(self._hist), player)
+        hit = _OBS_CACHE.get(key)
+        if hit is not None:
+            return hit
         hole = np.zeros(3, dtype=np.float32)
         hole[_DECK[self._hole_ids[player]][0]] = 1.0
         public = np.zeros(4, dtype=np.float32)
@@ -135,7 +149,9 @@ class LeducEnv(GameEnv):
         hist = np.zeros(8 * 4, dtype=np.float32)
         for i, (_, action) in enumerate(self._hist[:8]):
             hist[4 * i + action + 1] = 1.0
-        return np.concatenate([hole, public, rnd, pid, hist])
+        obs = np.concatenate([hole, public, rnd, pid, hist])
+        _OBS_CACHE[key] = obs
+        return obs
 
     # --- internals ---
     def _round_hist(self) -> list[tuple[int, int]]:

@@ -41,7 +41,11 @@ def collect_batch(
             cached = cache.get(key)
             if cached is None:
                 probs_t = policy_probs(obs, mask)
-                probs = probs_t.detach().cpu().numpy().astype(np.float64)
+                probs = (
+                    probs_t.detach().cpu().numpy().astype(np.float64)
+                    if hasattr(probs_t, "detach")
+                    else np.asarray(probs_t, dtype=np.float64)
+                )
                 cum = np.cumsum(probs / probs.sum())
                 cum[-1] = 1.0  # guard float drift
                 cached = (probs, cum)

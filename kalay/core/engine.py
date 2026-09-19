@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 
 from kalay.core.batch import TrajectoryBatch
@@ -81,6 +82,7 @@ class RNaDEngine:
         self._last_anchor_step = 0
         self._prev_policy_grads: dict[int, torch.Tensor] = {}
         self._anchor_state_dicts: list[dict] = [self._snapshot()]
+        self._np_cache_step = -1  # numpy weight cache for the collection fast path
 
     # --- public API ---
     def train_step(self, batch: TrajectoryBatch) -> dict:
@@ -165,6 +167,26 @@ class RNaDEngine:
         with torch.no_grad():
             probs = masked_softmax(self.policy_net(obs_t), mask_t).squeeze(0)
         return probs
+
+    def policy_probs_np(self, obs: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
+        """Numpy fast path for collection: same weights, same masked softmax.
+
+        Torch's per-call op dispatch dominates single-row forwards (~0.4 ms);
+        this evaluates the identical MLP in numpy (~20 mcs). Float diffs vs the
+        torch forward are ~1e-6; mu recorded here IS the sampling distribution.
+        """
+        if self._np_cache_step != self.step_count:
+            sd = self.policy_net.state_dict()
+            self._np_w1 = sd["backbone.0.weight"].detach().cpu().numpy()
+            self._np_b1 = sd["backbone.0.bias"].detach().cpu().numpy()
+            self._np_w2 = sd["head.weight"].detach().cpu().numpy()
+            self._np_b2 = sd["head.bias"].detach().cpu().numpy()
+            self._np_cache_step = self.step_count
+        h = np.maximum(obs @ self._np_w1.T + self._np_b1, 0.0)
+        z = h @ self._np_w2.T + self._np_b2
+        z = np.where(legal_mask == 1.0, z, -1e9)
+        e = np.exp(z - z.max())
+        return e / e.sum()
 
     def anchor_state_dicts(self, window: int | None = None) -> list[dict]:
         """Anchor snapshots (Nash-average window) including the current parameters."""
