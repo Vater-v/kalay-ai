@@ -10,3 +10,5 @@ build/
 runs/
 *.pt
 *.ckpt
+rs/target/
+rs/Cargo.lock
