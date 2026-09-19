@@ -77,7 +77,14 @@ LEDUC_UNIFORM_RATIO = 0.10  # also <= 10% of the uniform policy's NashConv (unit
 @pytest.mark.tier_b
 @pytest.mark.parametrize("seed", SEEDS)
 def test_leduc_anchor_average_policy_near_nash(seed):
-    engine = train(LeducEnv, steps=LEDUC_STEPS, seed=seed)
+    # vec collector: state-machine equivalence to the sequential env is
+    # tier-A-proven (test_vec_leduc), same contracts; ~2.5x faster collection
+    cfg, _ = derive_engine_config(LeducEnv, budget_steps=LEDUC_STEPS, seed=seed)
+    engine = RNaDEngine(cfg)
+    rng = np.random.default_rng(seed)
+    from kalay.core.vec_leduc import collect_leduc_vec
+    for _ in range(LEDUC_STEPS):
+        engine.train_step(collect_leduc_vec(engine, BATCH_HANDS, rng))
     fn = anchor_average_policy_fn(engine)
     nc = nash_conv(LeducEnv(), fn)
     assert nc <= LEDUC_NASHCONV_MAX, f"Leduc NashConv {nc:.4f} > {LEDUC_NASHCONV_MAX}"
