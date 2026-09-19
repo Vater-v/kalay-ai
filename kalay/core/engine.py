@@ -99,7 +99,7 @@ class RNaDEngine:
             pi_ref = masked_softmax(self.ref_net(obs), mask)
         v_preds = self.value_net(obs)
 
-        dec_mask = decision_mask(lengths, T).to(self.device)
+        dec_mask = decision_mask(lengths, T)
         num_valid = dec_mask.sum().clamp(min=1.0)
 
         with torch.no_grad():

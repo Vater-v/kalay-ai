@@ -60,6 +60,8 @@ def bootstrap_next_value(
 
 
 def decision_mask(hand_lengths: torch.Tensor, T: int) -> torch.Tensor:
-    """[T, B] float mask of real decisions (including terminal)."""
-    t_idx = torch.arange(T).unsqueeze(1).expand(T, hand_lengths.shape[0])
+    """[T, B] float mask of real decisions (including terminal), on hand_lengths' device."""
+    t_idx = torch.arange(T, device=hand_lengths.device).unsqueeze(1).expand(
+        T, hand_lengths.shape[0]
+    )
     return (t_idx < hand_lengths.unsqueeze(0)).float()

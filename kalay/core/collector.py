@@ -35,7 +35,8 @@ def collect_batch(
             key = obs.tobytes() + mask.tobytes()
             cached = cache.get(key)
             if cached is None:
-                probs = np.asarray(policy_probs(obs, mask), dtype=np.float64)
+                probs_t = policy_probs(obs, mask)
+                probs = probs_t.detach().cpu().numpy().astype(np.float64)
                 cum = np.cumsum(probs / probs.sum())
                 cum[-1] = 1.0  # guard float drift
                 cached = (probs, cum)
