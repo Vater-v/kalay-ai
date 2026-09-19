@@ -41,11 +41,19 @@ def test_v3_zero_sum_rewards_and_determinism():
     eng = _engine(seed=3)
     rng = np.random.default_rng(3)
     b1 = collect_pushfold_v3(eng, 128, rng)
-    # per-hand zero-sum: BTN row + BB row of the same hand cancel
+    # per-hand zero-sum over PAIRED rows; BTN-fold hands carry no BB row
+    # (walk-over by design), their BTN reward is exactly -0.5
     rew = b1.terminal_reward[0].numpy()
     players = b1.player_id.numpy()
-    # every BTN row either ends alone (fold: -0.5) or pairs with a BB row
-    assert abs(rew[players == 0].sum() + rew[players == 1].sum()) < 1e-6
+    i = 0
+    while i < len(rew):
+        assert players[i] == 0
+        if i + 1 < len(rew) and players[i + 1] == 1:
+            assert abs(rew[i] + rew[i + 1]) < 1e-6
+            i += 2
+        else:
+            assert rew[i] == pytest.approx(-0.5)
+            i += 1
     eng2 = _engine(seed=3)
     rng2 = np.random.default_rng(3)
     losses1 = [eng.train_step(collect_pushfold_v3(eng, 32, rng))["loss_policy"]
