@@ -37,6 +37,8 @@ class EngineConfig:
     c_clip: float = 1.0
     grad_clip: float = 1.0
     reward_scale: float = 1.0
+    net_kind: str = "mlp"           # "mlp" | "v3" (token transformer)
+    max_len: int = 8                # v3: token slice capacity
     avg_window: int = 12  # anchor snapshots in the Nash-average window
     anchor_mode: str = "fixed"            # "fixed" (every anchor_period) | "drift"
     anchor_cum_kl: float = 3.0            # drift mode: high-water accumulated KL per phase
@@ -53,21 +55,34 @@ class RNaDEngine:
         self.cfg = cfg
         torch.manual_seed(cfg.seed)
         self.device = torch.device(cfg.device)
-        self.policy_net = PolicyMLP(cfg.obs_dim, cfg.n_actions, cfg.hidden).to(self.device)
-        self.value_net = ValueMLP(cfg.obs_dim, cfg.hidden).to(self.device)
+        if cfg.net_kind == "v3":
+            from kalay.core.nets_transformer import (
+                PolicyTransformerV3, TokenConfigV3, ValueTransformerV3,
+            )
+            tok = TokenConfigV3(n_actions=cfg.n_actions, max_len=cfg.max_len)
+            self.policy_net = PolicyTransformerV3(tok).to(self.device)
+            self.value_net = ValueTransformerV3(tok).to(self.device)
+        else:
+            self.policy_net = PolicyMLP(cfg.obs_dim, cfg.n_actions, cfg.hidden).to(self.device)
+            self.value_net = ValueMLP(cfg.obs_dim, cfg.hidden).to(self.device)
+        self.token_batch = None  # v3: packed unique decision slices
         self.ref_net = copy.deepcopy(self.policy_net)
         for p in self.ref_net.parameters():
             p.requires_grad_(False)
+        pol_bb = (self.policy_net.trunk.backbone if cfg.net_kind == "v3"
+                  else self.policy_net.backbone)
+        val_bb = (self.value_net.trunk.backbone if cfg.net_kind == "v3"
+                  else self.value_net.backbone)
         self.opt_policy = torch.optim.AdamW(
             [
-                {"params": self.policy_net.backbone.parameters(), "weight_decay": 1e-2},
+                {"params": pol_bb.parameters(), "weight_decay": 1e-2},
                 {"params": self.policy_net.head.parameters(), "weight_decay": 0.0},
             ],
             lr=cfg.lr_policy,
         )
         self.opt_value = torch.optim.AdamW(
             [
-                {"params": self.value_net.backbone.parameters(), "weight_decay": 1e-2},
+                {"params": val_bb.parameters(), "weight_decay": 1e-2},
                 {"params": self.value_net.head.parameters(), "weight_decay": 0.0},
             ],
             lr=cfg.lr_value,
@@ -94,11 +109,21 @@ class RNaDEngine:
         lengths = batch.hand_lengths.to(self.device)
         T, B, _ = mask.shape
 
-        raw_logits = self.policy_net(obs)
-        pi = masked_softmax(raw_logits, mask)
-        with torch.no_grad():
-            pi_ref = masked_softmax(self.ref_net(obs), mask)
-        v_preds = self.value_net(obs)
+        if batch.slice_ids is not None:  # v3 token pipeline: gather by slice
+            assert self.token_batch is not None, "v3 engine needs token_batch set"
+            raw_logits = self.policy_net(self.token_batch)[batch.slice_ids.to(self.device)]
+            with torch.no_grad():
+                pi_ref = masked_softmax(
+                    self.ref_net(self.token_batch)[batch.slice_ids.to(self.device)], mask
+                )
+            v_preds = self.value_net(self.token_batch)[batch.slice_ids.to(self.device)]
+            pi = masked_softmax(raw_logits, mask)
+        else:
+            raw_logits = self.policy_net(obs)
+            pi = masked_softmax(raw_logits, mask)
+            with torch.no_grad():
+                pi_ref = masked_softmax(self.ref_net(obs), mask)
+            v_preds = self.value_net(obs)
 
         dec_mask = decision_mask(lengths, T)
         num_valid = dec_mask.sum().clamp(min=1.0)

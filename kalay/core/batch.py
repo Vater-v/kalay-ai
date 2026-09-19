@@ -22,6 +22,7 @@ class TrajectoryBatch:
     hand_lengths: torch.Tensor   # [B] int64
     player_id: torch.Tensor      # [B] int64
     reward_scale: float
+    slice_ids: torch.Tensor | None = None  # [T, B] long: v3 token slice index
 
     def validate(self, n_players: int | None = None) -> None:
         T, B, K = self.legal_mask.shape
