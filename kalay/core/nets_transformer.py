@@ -1,7 +1,7 @@
 """Token transformer v3 (DESIGN_NET v3): [DECISION] + full bidirectional.
 
 Owner's take adopted over block-causal v2: each decision is its own slice
-[context..., DECISION]; attention within a slice is fully bidirectional
+[DECISION, META, context...]; attention within a slice is fully bidirectional
 (cards/actions/meta all see each other), the DECISION token accumulates the
 hand summary and is the ONLY readout (policy/value heads hang off it).
 This matches the player-centric [T, B] batch exactly (one row = one infoset),
@@ -58,7 +58,14 @@ class FourierNumerics(nn.Module):
 
 
 class TokenStreamBatch:
-    """One decision per row: [META, context..., DECISION]."""
+    """One decision per row: [DECISION, META, context...].
+
+    DECISION sits FIRST: fixed positional index (0) - the readout slot never
+    entangles hand depth into its own position; query-before-content ([CLS]
+    pattern); trivial extraction. Owner's directive after questioning the
+    end placement. Training cap (owner's deliberate policy): hands with more
+    than 16 * n_players actions are SKIPPED entirely (not trained on).
+    """
 
     def __init__(self, kind, card, act_type, round_id, seat, pos_index,
                  v_num, pad) -> None:
@@ -115,10 +122,8 @@ class _TrunkV3(nn.Module):
 
 
 def decision_hidden(h: torch.Tensor, pad: torch.Tensor) -> torch.Tensor:
-    """Hidden of the DECISION token = last real position per row -> [B, D]."""
-    lengths = pad.sum(dim=1).clamp(min=1)
-    idx = (lengths - 1).view(-1, 1, 1).expand(-1, 1, h.size(-1))
-    return h.gather(1, idx).squeeze(1)
+    """Hidden of the DECISION token (position 0) -> [B, D]."""
+    return h[:, 0]
 
 
 class PolicyTransformerV3(nn.Module):

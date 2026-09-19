@@ -15,7 +15,7 @@ from kalay.core.nets_transformer import (
     ValueTransformerV3,
 )
 
-KINDS = [META, CARD, CARD, CARD, CARD, CARD, ACTION, ACTION, ACTION, DECISION]
+KINDS = [DECISION, META, CARD, CARD, CARD, CARD, CARD, ACTION, ACTION, ACTION]
 
 
 def _cfg(seed=0):
@@ -83,7 +83,7 @@ def test_bidirectional_perturbations_everywhere_matter():
         b.act_type[:, 8] = (b.act_type[:, 8] + 1) % 3
 
     def perturb_early_card(b):
-        b.card[:, 1] = (b.card[:, 1] + 7) % 52 + 1
+        b.card[:, 2] = (b.card[:, 2] + 7) % 52 + 1
 
     base = pol(_batch())
     assert not torch.allclose(base, pol(_batch(mutate=perturb_late_action)), atol=1e-5)
@@ -106,13 +106,13 @@ def test_hole_card_symmetry_shared_position():
     pol, val = _nets(cfg)
 
     def share_pos(b):
-        b.pos_index[:, 2] = b.pos_index[:, 1]
-        b.seat[:, 2] = b.seat[:, 1]      # same owner
-        b.v_num[:, 2] = b.v_num[:, 1]    # cards carry no numerics
+        b.pos_index[:, 3] = b.pos_index[:, 2]
+        b.seat[:, 3] = b.seat[:, 2]      # same owner
+        b.v_num[:, 3] = b.v_num[:, 2]    # cards carry no numerics
 
     def swap_hole(b):
-        c1, c2 = b.card[:, 1].clone(), b.card[:, 2].clone()
-        b.card[:, 1], b.card[:, 2] = c2, c1
+        c1, c2 = b.card[:, 2].clone(), b.card[:, 3].clone()
+        b.card[:, 2], b.card[:, 3] = c2, c1
 
     b1 = _batch(mutate=share_pos)
     b2 = _batch(mutate=lambda b: (share_pos(b), swap_hole(b)))
